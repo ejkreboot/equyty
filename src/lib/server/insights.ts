@@ -63,7 +63,7 @@ export async function generateInsights(userId: string): Promise<InsightPayload> 
 				.select('description, merchant_name, direction, frequency, average_amount, is_active')
 				.eq('user_id', userId)
 				.eq('is_active', true),
-			supabaseAdmin.from('accounts').select('type, current_balance, is_hidden').eq('user_id', userId)
+			supabaseAdmin.from('accounts').select('type, current_balance, is_hidden').eq('user_id', userId).is('removed_at', null)
 		]);
 
 	const catById = new Map((categories ?? []).map((c) => [c.id, c]));

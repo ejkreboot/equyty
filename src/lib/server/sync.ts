@@ -41,7 +41,12 @@ export async function getAccessToken(itemId: string): Promise<string> {
 	return (await loadItem(itemId)).accessToken;
 }
 
-/** Upserts Plaid accounts and records today's balance snapshot. Returns plaid_account_id → uuid. */
+/**
+ * Upserts Plaid accounts and records today's balance snapshot. Returns
+ * plaid_account_id → uuid for ACTIVE accounts only: accounts the user removed
+ * are left out, so their transactions, holdings and recurring streams are never
+ * re-imported.
+ */
 async function upsertAccounts(userId: string, itemId: string, accounts: AccountBase[]) {
 	if (!accounts.length) return new Map<string, string>();
 
@@ -64,10 +69,11 @@ async function upsertAccounts(userId: string, itemId: string, accounts: AccountB
 			})),
 			{ onConflict: 'plaid_account_id' }
 		)
-		.select('id, plaid_account_id, current_balance');
+		.select('id, plaid_account_id, current_balance, removed_at');
 	if (error) throw error;
 
-	const snapshots = (data ?? [])
+	const active = (data ?? []).filter((a) => a.removed_at === null);
+	const snapshots = active
 		.filter((a) => a.current_balance !== null)
 		.map((a) => ({
 			account_id: a.id,
@@ -81,7 +87,7 @@ async function upsertAccounts(userId: string, itemId: string, accounts: AccountB
 			.upsert(snapshots, { onConflict: 'account_id,snapshot_date' });
 	}
 
-	return new Map((data ?? []).map((a) => [a.plaid_account_id, a.id]));
+	return new Map(active.map((a) => [a.plaid_account_id, a.id]));
 }
 
 function toRow(userId: string, accountId: string, t: Transaction): TxnInsert {
@@ -282,7 +288,7 @@ export async function syncItem(itemId: string, opts: { categorize?: boolean } = 
 			.eq('id', item.id);
 
 		await syncRecurring(userId, accessToken, accountIds);
-		if (accountsResp.accounts.some((a) => a.type === 'investment')) {
+		if (accountsResp.accounts.some((a) => a.type === 'investment' && accountIds.has(a.account_id))) {
 			await syncHoldings(userId, accessToken, accountIds);
 		}
 

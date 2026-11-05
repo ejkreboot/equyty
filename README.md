@@ -9,7 +9,7 @@ A personal finance app: connect your accounts through Plaid, and Equyty imports 
 | Area | What it does |
 | --- | --- |
 | **Dashboard** | Net worth trend, spending pace against last month, budget health, top categories, upcoming bills, recent activity, and a review queue |
-| **Accounts** | Balances grouped by type, net worth history, and connection health with one-click Plaid reconnect |
+| **Accounts** | Balances grouped by type, net worth history, and connection health with one-click Plaid reconnect. Remove a single account (its data is deleted and it is never re-imported) or disconnect a whole institution |
 | **Transactions** | Search and filters, inline recategorization, bulk edit, notes, excluding a transaction from reports, and "Always for {merchant}" rules |
 | **Cash Flow** | Monthly income against expenses, with drill-down into any month |
 | **Reports** | Sankey cash-flow diagram (by category and group, by group, or by category) with a table view, plus spending and income breakdowns and top merchants |
@@ -57,10 +57,11 @@ All of Equyty's tables, functions and types live in their own **`equyty` schema*
 1. **Apply the schema.** On a project that other apps also use, don't use `supabase db push`: it expects the remote migration history to match this repo's `supabase/migrations` exactly. Run the SQL directly, wrapped in a transaction:
    ```bash
    npx supabase link --project-ref <your-project-ref>
-   { echo "begin;"; cat supabase/migrations/20260927000000_init.sql; echo "commit;"; } > /tmp/equyty.sql
+   { echo "begin;"; cat supabase/migrations/*.sql; echo "commit;"; } > /tmp/equyty.sql
    npx supabase db query --remote -f /tmp/equyty.sql
    ```
    On a project that holds only Equyty, `npx supabase db push` works too.
+   That command applies every migration, so on a fresh project run it once. Later, run just the new migration file the same way.
 2. **Expose the schema to the API:** go to **Project Settings → Data API → Exposed schemas** and add `equyty`, keeping the schemas already listed. Until you do, every query fails with `PGRST106 Invalid schema: equyty`.
 3. **Authentication → URL Configuration:** set **Site URL** to your deployed URL, then add `http://localhost:5173/**` and `https://<your-app>.vercel.app/**` to **Redirect URLs**.
 4. Optional: to use token-hash links instead of the default PKCE links, set the *Confirm signup* email template to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`. `/auth/confirm` handles both kinds of link.

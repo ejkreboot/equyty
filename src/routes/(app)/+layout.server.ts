@@ -21,6 +21,7 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
 		sb
 			.from('accounts')
 			.select('id, item_id, name, display_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code, is_hidden, updated_at')
+			.is('removed_at', null)
 			.order('name'),
 		sb.from('plaid_items').select('id, institution_name, institution_color, status, error_code, last_synced_at, created_at').order('created_at')
 	]);

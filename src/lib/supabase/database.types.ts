@@ -79,6 +79,7 @@ export type AccountRow = {
 	credit_limit: number | null;
 	iso_currency_code: string;
 	is_hidden: boolean;
+	removed_at: string | null;
 	created_at: string;
 	updated_at: string;
 };

@@ -7,7 +7,7 @@
 	import SyncButton from '$lib/components/SyncButton.svelte';
 	import ConnectionList from '$lib/components/ConnectionList.svelte';
 	import LineChart from '$lib/components/charts/LineChart.svelte';
-	import { invalidate } from '$app/navigation';
+	import { invalidate, invalidateAll } from '$app/navigation';
 	import { ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_LABELS, isLiability } from '$lib/finance';
 	import { parseDate } from '$lib/dates';
 	import { money, relativeTime, titleCase } from '$lib/format';
@@ -33,6 +33,44 @@
 	const points = $derived(data.history.map((p) => ({ x: parseDate(p.day).getTime(), y: Number(p.assets) - Number(p.liabilities) })));
 	const accountCounts = $derived(new Map(data.items.map((i) => [i.id, data.accounts.filter((a) => a.item_id === i.id).length])));
 	const itemName = (id: string) => data.items.find((i) => i.id === id)?.institution_name ?? '';
+
+	// ---- removal ----
+	let removing = $state<Account | null>(null);
+	let removeOpen = $state(false);
+	let removeBusy = $state(false);
+	let removeCount = $state<number | null>(null);
+	const removingLast = $derived(!!removing && data.accounts.filter((a) => a.item_id === removing!.item_id).length === 1);
+
+	async function openRemove(a: Account) {
+		removing = a;
+		removeCount = null;
+		removeOpen = true;
+		const { count } = await supabase().from('transactions').select('id', { count: 'exact', head: true }).eq('account_id', a.id);
+		if (removing?.id === a.id) removeCount = count ?? 0;
+	}
+
+	async function confirmRemove() {
+		if (!removing) return;
+		const a = removing;
+		removeBusy = true;
+		try {
+			const res = await fetch(`/api/accounts/${a.id}`, { method: 'DELETE' });
+			const body = await res.json().catch(() => null);
+			if (!res.ok) throw new Error(body?.message ?? 'Could not remove the account');
+			removeOpen = false;
+			await invalidateAll();
+			toast(
+				body.removed === 'connection'
+					? `Removed ${a.display_name ?? a.name} and disconnected ${itemName(a.item_id) || 'the institution'}`
+					: `Removed ${a.display_name ?? a.name}`,
+				'success'
+			);
+		} catch (err) {
+			toast(err instanceof Error ? err.message : 'Could not remove the account', 'error');
+		} finally {
+			removeBusy = false;
+		}
+	}
 
 	let renaming = $state<Account | null>(null);
 	let renameOpen = $state(false);
@@ -125,6 +163,8 @@
 													<Icon name={a.is_hidden ? 'visibility' : 'visibility_off'} size={17} />{a.is_hidden ? 'Show in totals' : 'Hide from totals'}
 												</button>
 												<a href="/transactions?account={a.id}"><Icon name="receipt_long" size={17} />Transactions</a>
+												<hr />
+												<button class="danger" onclick={() => (close(), openRemove(a))}><Icon name="delete" size={17} />Remove account…</button>
 											</div>
 										{/snippet}
 									</Popover>
@@ -159,6 +199,34 @@
 	{#snippet footer()}
 		<button class="btn" onclick={() => (renameOpen = false)}>Cancel</button>
 		<button class="btn primary" form="rename">Save</button>
+	{/snippet}
+</Modal>
+
+<Modal bind:open={removeOpen} title="Remove {removing?.display_name ?? removing?.name ?? 'account'}?" width={460}>
+	<div class="remove-body">
+		<p>This permanently deletes from Equyty:</p>
+		<ul>
+			<li>{removeCount === null ? 'All' : removeCount.toLocaleString()} transaction{removeCount === 1 ? '' : 's'}, including your notes and categories on them</li>
+			<li>Balance history, holdings and recurring bills for this account</li>
+		</ul>
+		{#if removingLast}
+			<div class="notice">
+				<Icon name="link_off" size={18} />
+				<span>This is your only account from <strong>{removing ? itemName(removing.item_id) || 'this institution' : ''}</strong>, so Equyty will also disconnect it and revoke access at Plaid.</span>
+			</div>
+		{:else}
+			<div class="notice">
+				<Icon name="info" size={18} />
+				<span>Your other {removing ? itemName(removing.item_id) || '' : ''} accounts stay connected. This account won't be imported again.</span>
+			</div>
+		{/if}
+		<p class="muted">Budgets, goals, categories and rules are kept.</p>
+	</div>
+	{#snippet footer()}
+		<button class="btn" onclick={() => (removeOpen = false)}>Cancel</button>
+		<button class="btn danger solid" onclick={confirmRemove} disabled={removeBusy}>
+			{removeBusy ? 'Removing…' : removingLast ? 'Remove and disconnect' : 'Remove account'}
+		</button>
 	{/snippet}
 </Modal>
 
@@ -305,6 +373,40 @@
 	.menu button:hover,
 	.menu a:hover {
 		background: var(--surface-3);
+	}
+	.menu .danger {
+		color: var(--negative);
+	}
+	.menu hr {
+		height: 1px;
+		margin: 4px 6px;
+		border: 0;
+		background: var(--border);
+	}
+	.remove-body {
+		display: grid;
+		gap: 12px;
+		font-size: 13.5px;
+	}
+	.remove-body ul {
+		margin: 0;
+		padding-left: 18px;
+		display: grid;
+		gap: 4px;
+		color: var(--ink-2);
+	}
+	.notice {
+		display: flex;
+		gap: 10px;
+		padding: 10px 12px;
+		border-radius: var(--radius);
+		background: var(--surface-2);
+		box-shadow: inset 0 0 0 1px var(--border);
+		color: var(--ink-2);
+	}
+	.notice :global(.icon) {
+		color: var(--ink-3);
+		margin-top: 1px;
 	}
 	.conn-wrap {
 		padding: 8px 0 4px;
