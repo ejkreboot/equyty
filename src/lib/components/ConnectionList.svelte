@@ -80,16 +80,21 @@
 						<Icon name="sync" size={17} class={syncing === item.id ? 'spin' : ''} />Sync
 					</button>
 				{/if}
-				<button class="btn ghost icon-only sm" aria-label="Disconnect {item.institution_name}" title="Disconnect" onclick={() => ((removing = item), (confirmOpen = true))}>
-					<Icon name="link_off" size={18} />
+				<button class="btn ghost danger sm" aria-label="Disconnect {item.institution_name ?? 'institution'}" onclick={() => ((removing = item), (confirmOpen = true))}>
+					<Icon name="link_off" size={17} />Disconnect
 				</button>
 			</div>
 		</li>
 	{/each}
 </ul>
 
-<Modal bind:open={confirmOpen} title="Disconnect {removing?.institution_name ?? 'institution'}?" description="This revokes Equyty’s access at Plaid and permanently deletes its accounts and transactions here.">
-	<p class="secondary">Budgets, goals, categories and rules are kept.</p>
+<Modal bind:open={confirmOpen} title="Disconnect {removing?.institution_name ?? 'institution'}?" description="This revokes Equyty’s access at Plaid and permanently deletes its data here.">
+	{@const n = removing ? (accountCounts.get(removing.id) ?? 0) : 0}
+	<p class="secondary">
+		{n} account{n === 1 ? '' : 's'} and all of {n === 1 ? 'its' : 'their'} transactions, balance history, holdings and recurring bills will be deleted. Budgets,
+		goals, categories and rules are kept.
+	</p>
+	<p class="muted hint">To use this bank again later, connect it as a new account.</p>
 	{#snippet footer()}
 		<button class="btn" onclick={() => (confirmOpen = false)}>Cancel</button>
 		<button class="btn danger solid" onclick={remove} disabled={removeBusy}>{removeBusy ? 'Disconnecting…' : 'Disconnect'}</button>
@@ -134,5 +139,9 @@
 	.acts {
 		display: flex;
 		gap: 6px;
+	}
+	.hint {
+		margin-top: 8px;
+		font-size: 12.5px;
 	}
 </style>
